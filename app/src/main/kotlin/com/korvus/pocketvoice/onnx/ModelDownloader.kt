@@ -1,4 +1,4 @@
-package com.korvus.voicechanger.onnx
+package com.korvus.pocketvoice.onnx
 
 import android.content.Context
 import kotlinx.coroutines.Dispatchers

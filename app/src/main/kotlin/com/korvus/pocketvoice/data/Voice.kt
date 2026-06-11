@@ -1,4 +1,4 @@
-package com.korvus.voicechanger.data
+package com.korvus.pocketvoice.data
 
 import kotlinx.serialization.Serializable
 

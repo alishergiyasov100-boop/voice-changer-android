@@ -1,4 +1,4 @@
-package com.korvus.voicechanger.audio
+package com.korvus.pocketvoice.audio
 
 import android.media.MediaCodec
 import android.media.MediaExtractor

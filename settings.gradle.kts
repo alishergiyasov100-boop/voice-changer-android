@@ -20,5 +20,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "voicechanger"
+rootProject.name = "pocketvoice"
 include(":app")

@@ -1,11 +1,11 @@
-package com.korvus.voicechanger.onnx
+package com.korvus.pocketvoice.onnx
 
 import ai.onnxruntime.OnnxTensor
 import ai.onnxruntime.OrtEnvironment
 import ai.onnxruntime.OrtSession
 import android.content.Context
-import com.korvus.voicechanger.audio.Pcm
-import com.korvus.voicechanger.audio.Stft
+import com.korvus.pocketvoice.audio.Pcm
+import com.korvus.pocketvoice.audio.Stft
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File

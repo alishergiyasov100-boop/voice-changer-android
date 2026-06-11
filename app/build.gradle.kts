@@ -6,13 +6,13 @@ plugins {
 }
 
 android {
-    namespace = "com.korvus.voicechanger"
+    namespace = "com.korvus.pocketvoice"
     compileSdk = 34
 
     sourceSets["main"].kotlin.srcDirs("src/main/kotlin")
 
     defaultConfig {
-        applicationId = "com.korvus.voicechanger"
+        applicationId = "com.korvus.pocketvoice"
         minSdk = 26
         targetSdk = 34
         versionCode = 1

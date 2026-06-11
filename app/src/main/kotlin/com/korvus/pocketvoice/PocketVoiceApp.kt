@@ -1,15 +1,15 @@
-package com.korvus.voicechanger
+package com.korvus.pocketvoice
 
 import android.app.Application
-import com.korvus.voicechanger.data.Settings
-import com.korvus.voicechanger.data.VoiceStore
-import com.korvus.voicechanger.onnx.LocalConverter
+import com.korvus.pocketvoice.data.Settings
+import com.korvus.pocketvoice.data.VoiceStore
+import com.korvus.pocketvoice.onnx.LocalConverter
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 
-class VoiceChangerApp : Application() {
+class PocketVoiceApp : Application() {
     lateinit var settings: Settings
         private set
     lateinit var voiceStore: VoiceStore
@@ -27,12 +27,12 @@ class VoiceChangerApp : Application() {
         converter = LocalConverter(this)
         appScope.launch {
             voiceStore.load()
-            voiceStore.seedFromAssetsIfEmpty(this@VoiceChangerApp)
+            voiceStore.seedFromAssetsIfEmpty(this@PocketVoiceApp)
         }
     }
 
     companion object {
-        lateinit var instance: VoiceChangerApp
+        lateinit var instance: PocketVoiceApp
             private set
     }
 }
