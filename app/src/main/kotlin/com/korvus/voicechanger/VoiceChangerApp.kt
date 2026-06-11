@@ -3,6 +3,7 @@ package com.korvus.voicechanger
 import android.app.Application
 import com.korvus.voicechanger.data.Settings
 import com.korvus.voicechanger.data.VoiceStore
+import com.korvus.voicechanger.onnx.LocalConverter
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -13,6 +14,8 @@ class VoiceChangerApp : Application() {
         private set
     lateinit var voiceStore: VoiceStore
         private set
+    lateinit var converter: LocalConverter
+        private set
 
     val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
@@ -21,6 +24,7 @@ class VoiceChangerApp : Application() {
         instance = this
         settings = Settings(this)
         voiceStore = VoiceStore(this)
+        converter = LocalConverter(this)
         appScope.launch {
             voiceStore.load()
             voiceStore.seedFromAssetsIfEmpty(this@VoiceChangerApp)

@@ -67,5 +67,6 @@ dependencies {
     implementation(libs.okhttp)
     implementation(libs.okhttp.logging)
     implementation(libs.coil.compose)
+    implementation(libs.onnxruntime.android)
     debugImplementation(libs.androidx.ui.tooling)
 }

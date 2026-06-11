@@ -72,10 +72,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import com.korvus.voicechanger.VoiceChangerApp
-import com.korvus.voicechanger.api.SeedVCClient
+import com.korvus.voicechanger.audio.Pcm
 import com.korvus.voicechanger.audio.Recorder
 import com.korvus.voicechanger.data.Settings
 import com.korvus.voicechanger.data.Voice
+import com.korvus.voicechanger.onnx.DownloadState
 import com.korvus.voicechanger.ui.theme.Accent
 import com.korvus.voicechanger.ui.theme.Bg
 import com.korvus.voicechanger.ui.theme.BgCard
@@ -111,6 +112,18 @@ fun HomeScreen() {
     var pendingUri by remember { mutableStateOf<android.net.Uri?>(null) }
 
     val recorder = remember { Recorder(ctx) }
+    val downloadState by app.converter.downloadState.collectAsState()
+    var modelReady by remember { mutableStateOf(app.converter.isReady()) }
+
+    LaunchedEffect(Unit) {
+        if (!app.converter.isReady()) {
+            app.converter.ensureDownloaded()
+        }
+        modelReady = app.converter.isReady()
+    }
+    LaunchedEffect(downloadState) {
+        if (downloadState is DownloadState.Ready) modelReady = true
+    }
 
     val permLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -128,17 +141,12 @@ fun HomeScreen() {
     suspend fun runConvert(src: File, voice: Voice) {
         phase = Phase.Processing
         elapsedSec = 0f
-        val snap = app.settings.snapshot()
         val refFile = app.voiceStore.fileOf(voice)
         try {
-            val client = SeedVCClient(
-                space = snap.space,
-                steps = snap.steps,
-                lengthAdjust = snap.lenPct / 100f,
-                pitchShift = snap.pitch,
-            )
-            val url = client.convert(src, refFile)
-            outUrl = url
+            val audio = app.converter.convert(src, refFile, tau = 0.8f)
+            val outFile = File(ctx.cacheDir, "out_${System.currentTimeMillis()}.wav")
+            Pcm.writeWav(audio, outFile)
+            outUrl = "file://${outFile.absolutePath}"
             phase = Phase.Done
         } catch (t: Throwable) {
             errMsg = t.message ?: t.toString()
@@ -200,13 +208,47 @@ fun HomeScreen() {
         }
         Spacer(Modifier.height(28.dp))
 
+        // Download progress (если модель не готова)
+        val dlState = downloadState
+        if (!modelReady && dlState is DownloadState.Downloading) {
+            val pct = (dlState.overallDone * 100 / dlState.overallTotal.coerceAtLeast(1)).toInt()
+            Column(modifier = Modifier.padding(horizontal = 20.dp)) {
+                Text(
+                    "СКАЧИВАНИЕ МОДЕЛИ · ${pct}%",
+                    color = Accent, fontSize = 10.sp,
+                    fontWeight = FontWeight.Black, letterSpacing = 2.sp,
+                )
+                Spacer(Modifier.height(6.dp))
+                Box(
+                    modifier = Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(50)).background(BgCard),
+                ) {
+                    Box(
+                        modifier = Modifier.fillMaxWidth(pct / 100f).height(4.dp).background(Accent),
+                    )
+                }
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    "${dlState.fileName} · ${dlState.overallDone / 1024 / 1024} / ${dlState.overallTotal / 1024 / 1024} МБ",
+                    color = InkSoft, fontSize = 10.sp,
+                )
+            }
+            Spacer(Modifier.height(10.dp))
+        } else if (!modelReady && dlState is DownloadState.Error) {
+            Text(
+                "Ошибка скачивания: ${dlState.msg}",
+                color = Warn, fontSize = 12.sp,
+                modifier = Modifier.padding(horizontal = 20.dp),
+            )
+        }
+
         // Status / Hint
         val hint = when {
+            !modelReady -> "Качаю OpenVoice (~160 МБ). Один раз, потом offline."
             voices.isEmpty() -> "Импортируй MP3 голоса ↑"
             activeVoice == null -> "Выбери голос ↑"
             phase == Phase.Idle -> "Зажми, говори, отпусти."
             phase == Phase.Recording -> "Запись… отпусти когда готов."
-            phase == Phase.Processing -> "Конвертирую через Seed-VC…"
+            phase == Phase.Processing -> "Конвертирую локально (ONNX)…"
             phase == Phase.Done -> "Готово ✓"
             phase == Phase.Error -> "Ошибка — попробуй ещё."
             else -> ""
@@ -224,6 +266,7 @@ fun HomeScreen() {
             RecordButton(
                 phase = phase,
                 onPressStart = {
+                    if (!modelReady) return@RecordButton
                     if (activeVoice == null) return@RecordButton
                     if (ContextCompat.checkSelfPermission(ctx, Manifest.permission.RECORD_AUDIO)
                         != PackageManager.PERMISSION_GRANTED) {
