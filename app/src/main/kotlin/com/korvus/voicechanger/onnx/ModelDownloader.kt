@@ -38,42 +38,72 @@ class ModelDownloader(private val ctx: Context) {
 
     suspend fun ensureDownloaded() = withContext(Dispatchers.IO) {
         if (isReady()) { _state.value = DownloadState.Ready; return@withContext }
-        try {
-            val total = files.values.sumOf { it.expectedSize }
-            var done = 0L
-            for ((idx, spec) in files.values.withIndex()) {
-                val f = File(dir, spec.name)
-                if (f.length() >= spec.expectedSize * 0.95) { done += spec.expectedSize; continue }
-                val req = Request.Builder().url(spec.url).build()
-                val resp = client.newCall(req).execute()
-                if (!resp.isSuccessful) throw Exception("HTTP ${resp.code} for ${spec.url}")
+        val total = files.values.sumOf { it.expectedSize }
+        var done = 0L
+        for ((idx, spec) in files.values.withIndex()) {
+            val f = File(dir, spec.name)
+            // если файл уже полностью скачан — скип
+            if (f.length() >= spec.expectedSize * 0.99) { done += spec.expectedSize; continue }
+            try {
+                downloadWithResume(idx, spec, f, done, total)
+                done += spec.expectedSize
+            } catch (t: Throwable) {
+                _state.value = DownloadState.Error("${spec.name}: ${t.message}")
+                return@withContext
+            }
+        }
+        _state.value = DownloadState.Ready
+    }
+
+    private suspend fun downloadWithResume(idx: Int, spec: FileSpec, f: File, accDone: Long, total: Long) {
+        val maxAttempts = 6
+        var attempt = 0
+        var lastErr: Throwable? = null
+        while (attempt < maxAttempts) {
+            attempt++
+            val startFrom = if (f.exists()) f.length() else 0L
+            if (startFrom >= spec.expectedSize * 0.99 && startFrom > 0) return
+            try {
+                val reqBuilder = Request.Builder().url(spec.url)
+                if (startFrom > 0) reqBuilder.header("Range", "bytes=$startFrom-")
+                val resp = client.newCall(reqBuilder.build()).execute()
+                if (resp.code !in setOf(200, 206)) throw Exception("HTTP ${resp.code}")
                 val body = resp.body ?: throw Exception("no body")
-                val contentLen = body.contentLength().takeIf { it > 0 } ?: spec.expectedSize
-                f.outputStream().use { out ->
+                val partial = resp.code == 206
+                val contentLen = body.contentLength().takeIf { it > 0 } ?: (spec.expectedSize - startFrom)
+                val expectedTotal = if (partial) startFrom + contentLen else contentLen
+
+                val out = java.io.FileOutputStream(f, partial)  // append если 206
+                out.use { fos ->
                     val src = body.byteStream()
                     val buf = ByteArray(64 * 1024)
                     var n: Int
-                    var fileDone = 0L
+                    var fileDone = startFrom
                     while (src.read(buf).also { n = it } > 0) {
-                        out.write(buf, 0, n)
+                        fos.write(buf, 0, n)
                         fileDone += n
-                        val cur = done + fileDone
                         _state.value = DownloadState.Downloading(
-                            fileIndex = idx,
-                            fileName = spec.name,
-                            fileDone = fileDone,
-                            fileTotal = contentLen,
-                            overallDone = cur,
-                            overallTotal = total,
+                            fileIndex = idx, fileName = spec.name,
+                            fileDone = fileDone, fileTotal = expectedTotal,
+                            overallDone = accDone + fileDone, overallTotal = total,
                         )
                     }
                 }
-                done += spec.expectedSize
+                if (f.length() >= spec.expectedSize * 0.99) return
+                // докачали меньше чем ожидали — попробуем ещё раз с того места
+                lastErr = Exception("short read, got ${f.length()}/${spec.expectedSize}")
+            } catch (t: Throwable) {
+                lastErr = t
+                _state.value = DownloadState.Downloading(
+                    fileIndex = idx, fileName = "${spec.name} (retry ${attempt}/${maxAttempts})",
+                    fileDone = f.length(), fileTotal = spec.expectedSize,
+                    overallDone = accDone + f.length(), overallTotal = total,
+                )
             }
-            _state.value = DownloadState.Ready
-        } catch (t: Throwable) {
-            _state.value = DownloadState.Error(t.message ?: t.toString())
+            // backoff
+            kotlinx.coroutines.delay((1000L * attempt).coerceAtMost(8000L))
         }
+        throw lastErr ?: Exception("download failed after $maxAttempts attempts")
     }
 
     companion object {
