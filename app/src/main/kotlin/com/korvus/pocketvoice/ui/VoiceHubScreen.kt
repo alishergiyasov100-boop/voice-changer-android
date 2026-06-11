@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -41,8 +42,15 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.TextButton
+import androidx.compose.ui.platform.LocalContext
+import com.korvus.pocketvoice.PocketVoiceApp
 import com.korvus.pocketvoice.api.HfHub
 import com.korvus.pocketvoice.api.HubModel
+import com.korvus.pocketvoice.api.RepoFile
 import com.korvus.pocketvoice.ui.theme.VioletDeep
 import com.korvus.pocketvoice.ui.theme.VioletPale
 import com.korvus.pocketvoice.ui.theme.VioletPrimary
@@ -54,11 +62,17 @@ private val PRESET_QUERIES = listOf(
 
 @Composable
 fun VoiceHubScreen() {
+    val ctx = LocalContext.current
+    val app = PocketVoiceApp.instance
     val scope = rememberCoroutineScope()
     var query by remember { mutableStateOf("gpt-sovits") }
     var loading by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var results by remember { mutableStateOf<List<HubModel>>(emptyList()) }
+    var detail by remember { mutableStateOf<HubModel?>(null) }
+    var detailFiles by remember { mutableStateOf<List<RepoFile>>(emptyList()) }
+    var detailLoading by remember { mutableStateOf(false) }
+    var toast by remember { mutableStateOf<String?>(null) }
 
     fun runSearch() {
         scope.launch {
@@ -145,24 +159,77 @@ fun VoiceHubScreen() {
             else -> LazyColumn(
                 contentPadding = PaddingValues(horizontal = 24.dp, vertical = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier.weight(1f),
             ) {
                 items(results, key = { it.id }) { m ->
-                    HubCard(m)
+                    HubCard(m, onClick = {
+                        detail = m
+                        detailFiles = emptyList()
+                        detailLoading = true
+                        scope.launch {
+                            try { detailFiles = HfHub.listAudioFiles(m.id) }
+                            catch (t: Throwable) { toast = "Не загрузил файлы: ${t.message}" }
+                            finally { detailLoading = false }
+                        }
+                    })
                 }
                 item { Spacer(Modifier.height(80.dp)) }
+            }
+        }
+    }
+
+    val det = detail
+    if (det != null) {
+        DetailDialog(
+            m = det,
+            files = detailFiles,
+            loading = detailLoading,
+            onDismiss = { detail = null; detailFiles = emptyList() },
+            onInstall = { f ->
+                scope.launch {
+                    toast = "Скачиваю ${f.path}…"
+                    try {
+                        val name = "${det.name}/${f.path.substringAfterLast('/')}"
+                        val v = HfHub.downloadAsVoice(ctx, app.voiceStore, det.id, f.path, name)
+                        app.settings.setActiveVoice(v.id)
+                        toast = "Установлено ✓"
+                        detail = null
+                    } catch (t: Throwable) {
+                        toast = "Ошибка: ${t.message}"
+                    }
+                }
+            },
+        )
+    }
+
+    val t = toast
+    if (t != null) {
+        LaunchedEffect(t) {
+            kotlinx.coroutines.delay(2400)
+            toast = null
+        }
+        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
+            Box(
+                modifier = Modifier
+                    .padding(bottom = 90.dp)
+                    .clip(RoundedCornerShape(50))
+                    .background(MaterialTheme.colorScheme.onBackground)
+                    .padding(horizontal = 16.dp, vertical = 10.dp),
+            ) {
+                Text(t, color = MaterialTheme.colorScheme.background, fontSize = 12.sp)
             }
         }
     }
 }
 
 @Composable
-private fun HubCard(m: HubModel) {
+private fun HubCard(m: HubModel, onClick: () -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(18.dp))
             .background(MaterialTheme.colorScheme.surfaceVariant)
+            .clickable(onClick = onClick)
             .padding(16.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -201,10 +268,79 @@ private fun HubCard(m: HubModel) {
         }
         Spacer(Modifier.height(12.dp))
         Text(
-            "Открыть на HF: huggingface.co/${m.id}",
+            "Тапни → выбрать аудио-семпл и установить",
             color = VioletPrimary, fontSize = 11.sp,
         )
     }
+}
+
+@Composable
+private fun DetailDialog(
+    m: HubModel,
+    files: List<RepoFile>,
+    loading: Boolean,
+    onDismiss: () -> Unit,
+    onInstall: (RepoFile) -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Column {
+                Text(m.name, fontWeight = FontWeight.Black, fontSize = 16.sp)
+                Text("by ${m.author}", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
+            }
+        },
+        text = {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                if (loading) {
+                    Box(modifier = Modifier.fillMaxWidth().padding(20.dp), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator(color = VioletPrimary, strokeWidth = 3.dp,
+                            modifier = Modifier.size(28.dp))
+                    }
+                } else if (files.isEmpty()) {
+                    Text(
+                        "Аудио-файлов не найдено. " +
+                        "Открой репо на HF в Chrome чтобы вручную скачать ckpt.",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp,
+                    )
+                } else {
+                    Text(
+                        "Аудио семплы (тапни чтобы установить):",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontSize = 11.sp, fontWeight = FontWeight.SemiBold,
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    LazyColumn(
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                        modifier = Modifier.heightIn(max = 360.dp),
+                    ) {
+                        items(files) { f ->
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(VioletPale)
+                                    .clickable { onInstall(f) }
+                                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                            ) {
+                                Column {
+                                    Text(f.path, color = VioletDeep, fontSize = 13.sp,
+                                        fontWeight = FontWeight.SemiBold, maxLines = 1)
+                                    Text("${f.size / 1024} KB",
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Закрыть", color = VioletPrimary, fontWeight = FontWeight.SemiBold)
+            }
+        },
+    )
 }
 
 private fun formatCount(n: Int): String = when {

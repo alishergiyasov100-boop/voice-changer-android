@@ -98,6 +98,14 @@ class VoiceStore(ctx: Context) {
         v
     }
 
+    /** Добавить уже сохранённый файл (загруженный из HF Hub в voices/). */
+    suspend fun addExisting(v: Voice) = withContext(Dispatchers.IO) {
+        mutex.withLock {
+            _items.value = _items.value + v
+            persist()
+        }
+    }
+
     suspend fun delete(id: String) = withContext(Dispatchers.IO) {
         mutex.withLock {
             val v = _items.value.firstOrNull { it.id == id } ?: return@withLock

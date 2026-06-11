@@ -1,5 +1,8 @@
 package com.korvus.pocketvoice.api
 
+import android.content.Context
+import com.korvus.pocketvoice.data.Voice
+import com.korvus.pocketvoice.data.VoiceStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
@@ -8,7 +11,9 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import java.io.File
 import java.io.IOException
+import java.util.UUID
 
 data class HubModel(
     val id: String,
@@ -48,4 +53,64 @@ object HfHub {
             )
         }
     }
+
+    /** Возвращает список аудио-файлов в repo через HF tree API. */
+    suspend fun listAudioFiles(repoId: String): List<RepoFile> = withContext(Dispatchers.IO) {
+        val out = mutableListOf<RepoFile>()
+        listTree(repoId, "", out, depth = 0)
+        out.filter {
+            val ext = it.path.substringAfterLast('.').lowercase()
+            ext in setOf("wav", "mp3", "ogg", "flac", "m4a")
+        }.sortedBy { it.size }
+    }
+
+    private suspend fun listTree(repoId: String, path: String, out: MutableList<RepoFile>, depth: Int) {
+        if (depth > 2) return  // не нырять слишком глубоко
+        val pathPart = if (path.isEmpty()) "" else "/$path"
+        val url = "https://huggingface.co/api/models/$repoId/tree/main$pathPart"
+        val resp = client.newCall(Request.Builder().url(url).build()).execute()
+        val body = resp.body?.string().orEmpty()
+        if (!resp.isSuccessful) return
+        val arr = try { json.parseToJsonElement(body).jsonArray } catch (_: Throwable) { return }
+        for (el in arr) {
+            val o = el.jsonObject
+            val type = o["type"]?.jsonPrimitive?.content ?: continue
+            val name = o["path"]?.jsonPrimitive?.content ?: continue
+            val size = (o["size"]?.jsonPrimitive?.content ?: "0").toLongOrNull() ?: 0L
+            when (type) {
+                "file" -> out.add(RepoFile(path = name, size = size))
+                "directory" -> listTree(repoId, name, out, depth + 1)
+            }
+        }
+    }
+
+    /** Скачивает файл из HF repo в VoiceStore. Возвращает созданный Voice. */
+    suspend fun downloadAsVoice(
+        ctx: Context,
+        store: VoiceStore,
+        repoId: String,
+        path: String,
+        displayName: String,
+    ): Voice = withContext(Dispatchers.IO) {
+        val url = "https://huggingface.co/$repoId/resolve/main/$path"
+        val resp = client.newCall(Request.Builder().url(url).build()).execute()
+        if (!resp.isSuccessful) throw IOException("HF download ${resp.code}")
+        val body = resp.body ?: throw IOException("no body")
+        val id = UUID.randomUUID().toString()
+        val ext = path.substringAfterLast('.', "wav").lowercase()
+        val voicesDir = File(ctx.filesDir, "voices").apply { mkdirs() }
+        val dst = File(voicesDir, "$id.$ext")
+        dst.outputStream().use { out -> body.byteStream().copyTo(out) }
+        val v = Voice(
+            id = id, name = displayName,
+            emoji = "🎙",
+            filename = "$id.$ext",
+            sizeBytes = dst.length(),
+            builtin = false,
+        )
+        store.addExisting(v)
+        v
+    }
 }
+
+data class RepoFile(val path: String, val size: Long)
