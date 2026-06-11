@@ -149,7 +149,8 @@ fun HomeScreen() {
             outUrl = "file://${outFile.absolutePath}"
             phase = Phase.Done
         } catch (t: Throwable) {
-            errMsg = t.message ?: t.toString()
+            val trace = java.io.StringWriter().also { t.printStackTrace(java.io.PrintWriter(it)) }.toString()
+            errMsg = (t.message ?: t.toString()) + "\n\n" + trace.take(900)
             phase = Phase.Error
         }
     }

@@ -41,7 +41,7 @@ class LocalConverter(ctx: Context) {
         }
     }
 
-    /** PCM mono @ 22050 → tone embedding [1, 256]. */
+    /** PCM mono @ 22050 → tone embedding [256]. */
     private suspend fun extractEmbedding(audio: FloatArray): FloatArray = withContext(Dispatchers.Default) {
         ensureLoaded()
         val spec = Stft.magSpectrogram(audio)  // [frames][513]
@@ -49,12 +49,16 @@ class LocalConverter(ctx: Context) {
         val bins = spec[0].size
         val flat = FloatArray(frames * bins)
         for (f in 0 until frames) System.arraycopy(spec[f], 0, flat, f * bins, bins)
-        // input shape [1, frames, 513]
         val tensor = OnnxTensor.createTensor(env, FloatBuffer.wrap(flat), longArrayOf(1, frames.toLong(), bins.toLong()))
         try {
-            val out = extractSession!!.run(mapOf("input" to tensor))
-            val arr = out[0].value as Array<FloatArray>
-            arr[0]  // [256]
+            val result = extractSession!!.run(mapOf("input" to tensor))
+            val outTensor = result[0] as OnnxTensor
+            val fb = outTensor.floatBuffer
+            val arr = FloatArray(fb.remaining())
+            fb.get(arr)
+            // ожидаем 256 элементов
+            if (arr.size != 256) throw IllegalStateException("extract output expected 256 floats, got ${arr.size}")
+            arr
         } finally { tensor.close() }
     }
 
@@ -92,15 +96,11 @@ class LocalConverter(ctx: Context) {
                 "dest_tone" to dstSeTensor,
                 "tau" to tauTensor,
             ))
-            val v = out[0].value
-            when (v) {
-                is FloatArray -> v
-                is Array<*> -> {
-                    @Suppress("UNCHECKED_CAST") val a = v[0] as FloatArray
-                    a
-                }
-                else -> error("unexpected output type: ${v?.javaClass}")
-            }
+            val outTensor = out[0] as OnnxTensor
+            val fb = outTensor.floatBuffer
+            val arr = FloatArray(fb.remaining())
+            fb.get(arr)
+            arr
         } finally {
             audioTensor.close(); lenTensor.close()
             srcSeTensor.close(); dstSeTensor.close(); tauTensor.close()
