@@ -23,8 +23,8 @@ class ModelDownloader(private val ctx: Context) {
         .build()
 
     val files = mapOf(
-        "tone_extract.onnx" to FileSpec("tone_extract.onnx", BASE_URL + "tone_extract.onnx", 3_528_000L),
-        "tone_color.onnx" to FileSpec("tone_color.onnx", BASE_URL + "tone_color.onnx", 164_624_000L),
+        "tone_extract.onnx" to FileSpec("tone_extract.onnx", BASE_URL + "tone_extract.onnx", 3_364_792L),
+        "tone_color.onnx" to FileSpec("tone_color.onnx", BASE_URL + "tone_color.onnx", 157_196_170L),
         "tone_config.json" to FileSpec("tone_config.json", BASE_URL + "tone_config.json", 838L),
     )
 
@@ -67,6 +67,8 @@ class ModelDownloader(private val ctx: Context) {
                 val reqBuilder = Request.Builder().url(spec.url)
                 if (startFrom > 0) reqBuilder.header("Range", "bytes=$startFrom-")
                 val resp = client.newCall(reqBuilder.build()).execute()
+                // 416 = Range not satisfiable → файл уже полный, сервер тебе ничего нового не даст
+                if (resp.code == 416) { resp.close(); return }
                 if (resp.code !in setOf(200, 206)) throw Exception("HTTP ${resp.code}")
                 val body = resp.body ?: throw Exception("no body")
                 val partial = resp.code == 206
