@@ -244,7 +244,7 @@ fun HomeScreen() {
 
         // Status / Hint
         val hint = when {
-            !modelReady -> "Качаю OpenVoice (~160 МБ). Один раз, потом offline."
+            !modelReady -> "Готовлю OpenVoice (~160 МБ из APK). Один раз."
             voices.isEmpty() -> "Импортируй MP3 голоса ↑"
             activeVoice == null -> "Выбери голос ↑"
             phase == Phase.Idle -> "Зажми, говори, отпусти."

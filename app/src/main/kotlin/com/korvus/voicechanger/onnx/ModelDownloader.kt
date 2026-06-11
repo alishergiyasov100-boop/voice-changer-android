@@ -42,8 +42,12 @@ class ModelDownloader(private val ctx: Context) {
         var done = 0L
         for ((idx, spec) in files.values.withIndex()) {
             val f = File(dir, spec.name)
-            // если файл уже полностью скачан — скип
             if (f.length() >= spec.expectedSize * 0.99) { done += spec.expectedSize; continue }
+            // Сначала пробуем скопировать из bundled assets (если запекли в APK)
+            if (tryCopyFromAssets(idx, spec, f, done, total)) {
+                done += spec.expectedSize
+                continue
+            }
             try {
                 downloadWithResume(idx, spec, f, done, total)
                 done += spec.expectedSize
@@ -53,6 +57,32 @@ class ModelDownloader(private val ctx: Context) {
             }
         }
         _state.value = DownloadState.Ready
+    }
+
+    /** Копирует модель из app/assets/models/ если она там есть. Возвращает true при успехе. */
+    private fun tryCopyFromAssets(idx: Int, spec: FileSpec, f: File, accDone: Long, total: Long): Boolean {
+        return try {
+            ctx.assets.open("models/${spec.name}").use { input ->
+                f.outputStream().use { out ->
+                    val buf = ByteArray(256 * 1024)
+                    var n: Int
+                    var copied = 0L
+                    while (input.read(buf).also { n = it } > 0) {
+                        out.write(buf, 0, n)
+                        copied += n
+                        _state.value = DownloadState.Downloading(
+                            fileIndex = idx, fileName = "${spec.name} (из APK)",
+                            fileDone = copied, fileTotal = spec.expectedSize,
+                            overallDone = accDone + copied, overallTotal = total,
+                        )
+                    }
+                }
+            }
+            f.length() >= spec.expectedSize * 0.99
+        } catch (_: Throwable) {
+            // нет в assets — попробуем сеть
+            false
+        }
     }
 
     private suspend fun downloadWithResume(idx: Int, spec: FileSpec, f: File, accDone: Long, total: Long) {

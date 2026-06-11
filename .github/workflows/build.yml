@@ -14,6 +14,15 @@ jobs:
         with: { distribution: temurin, java-version: '17' }
       - uses: android-actions/setup-android@v3
       - uses: gradle/actions/setup-gradle@v3
+      - name: Download OpenVoice ONNX models into assets
+        run: |
+          mkdir -p app/src/main/assets/models
+          base="https://huggingface.co/Hinotsuba/OpenVoice-ONNX-v2/resolve/main"
+          for f in tone_extract.onnx tone_color.onnx tone_config.json; do
+            echo "downloading $f"
+            curl -L --retry 8 --retry-delay 6 --retry-all-errors -o "app/src/main/assets/models/$f" "$base/$f"
+          done
+          ls -la app/src/main/assets/models
       - run: chmod +x ./gradlew
       - run: ./gradlew assembleDebug assembleRelease --stacktrace
       - uses: actions/upload-artifact@v4
