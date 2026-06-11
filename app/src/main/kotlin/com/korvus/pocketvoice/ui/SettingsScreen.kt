@@ -18,6 +18,8 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -46,16 +48,20 @@ fun SettingsScreen() {
     val steps by app.settings.steps.collectAsState(initial = 25)
     val lenPct by app.settings.lenPct.collectAsState(initial = 100)
     val pitch by app.settings.pitch.collectAsState(initial = 0)
+    val serverUrl by app.settings.serverUrl.collectAsState(initial = "")
+    val serverOn by app.settings.serverOn.collectAsState(initial = false)
 
     var spaceVal by remember(space) { mutableStateOf(space) }
     var stepsVal by remember(steps) { mutableFloatStateOf(steps.toFloat()) }
     var lenVal by remember(lenPct) { mutableFloatStateOf(lenPct.toFloat()) }
     var pitchVal by remember(pitch) { mutableFloatStateOf(pitch.toFloat()) }
+    var serverUrlVal by remember(serverUrl) { mutableStateOf(serverUrl) }
 
     LaunchedEffect(spaceVal) { app.settings.setSpace(spaceVal.trim()) }
     LaunchedEffect(stepsVal) { app.settings.setSteps(stepsVal.toInt()) }
     LaunchedEffect(lenVal)   { app.settings.setLenPct(lenVal.toInt()) }
     LaunchedEffect(pitchVal) { app.settings.setPitch(pitchVal.toInt()) }
+    LaunchedEffect(serverUrlVal) { app.settings.setServerUrl(serverUrlVal.trim()) }
 
     Column(
         modifier = Modifier
@@ -76,8 +82,42 @@ fun SettingsScreen() {
         Spacer(Modifier.height(6.dp))
 
         SectionCard(
-            title = "Бэкенд (опционально)",
-            hint = "HF Space для GPT-SoVITS / Seed-VC, если запущен. Сейчас локальный OpenVoice работает без сети.",
+            title = "Server Mode (Colab / Kaggle GPU)",
+            hint = "Подними сервер по инструкции server/colab_seedvc_server.py и вставь cloudflared URL ниже. Когда включён — конверсия идёт на GPU, качество в разы выше.",
+        ) {
+            androidx.compose.foundation.layout.Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+            ) {
+                Text(
+                    "Использовать сервер",
+                    color = MaterialTheme.colorScheme.onBackground,
+                    fontSize = 14.sp, fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.weight(1f),
+                )
+                Switch(
+                    checked = serverOn,
+                    onCheckedChange = { scope.launch { app.settings.setServerOn(it) } },
+                    colors = SwitchDefaults.colors(
+                        checkedThumbColor = androidx.compose.ui.graphics.Color.White,
+                        checkedTrackColor = VioletPrimary,
+                    ),
+                )
+            }
+            OutlinedTextField(
+                value = serverUrlVal,
+                onValueChange = { serverUrlVal = it },
+                modifier = Modifier.fillMaxWidth(),
+                placeholder = { Text("https://xxx.trycloudflare.com") },
+                singleLine = true,
+                shape = RoundedCornerShape(14.dp),
+                colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = VioletPrimary),
+            )
+        }
+
+        SectionCard(
+            title = "HF Space (резерв)",
+            hint = "Резервный путь через публичный HF Space, не реализовано.",
         ) {
             OutlinedTextField(
                 value = spaceVal,

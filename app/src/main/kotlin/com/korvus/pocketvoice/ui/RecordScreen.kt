@@ -56,6 +56,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import com.korvus.pocketvoice.PocketVoiceApp
+import com.korvus.pocketvoice.api.RemoteVoiceServer
 import com.korvus.pocketvoice.audio.Pcm
 import com.korvus.pocketvoice.audio.Recorder
 import com.korvus.pocketvoice.data.Voice
@@ -104,9 +105,23 @@ fun RecordScreen() {
         phase = Phase.Processing
         val refFile = app.voiceStore.fileOf(voice)
         try {
-            val audio = app.converter.convert(src, refFile, tau = 0.8f)
+            val snap = app.settings.snapshot()
             val outFile = File(ctx.cacheDir, "out_${System.currentTimeMillis()}.wav")
-            Pcm.writeWav(audio, outFile)
+            if (snap.serverOn && snap.serverUrl.isNotBlank()) {
+                // Серверный режим — Colab/Kaggle GPU
+                val server = RemoteVoiceServer(
+                    baseUrl = snap.serverUrl,
+                    diffusionSteps = snap.steps,
+                    lengthAdjust = snap.lenPct / 100f,
+                    pitchShift = snap.pitch,
+                )
+                val bytes = server.convert(src, refFile)
+                outFile.writeBytes(bytes)
+            } else {
+                // Локальный OpenVoice ONNX
+                val audio = app.converter.convert(src, refFile, tau = 0.8f)
+                Pcm.writeWav(audio, outFile)
+            }
             outUrl = "file://${outFile.absolutePath}"
             phase = Phase.Done
         } catch (t: Throwable) {

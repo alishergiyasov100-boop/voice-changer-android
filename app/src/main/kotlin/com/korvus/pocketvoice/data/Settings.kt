@@ -20,12 +20,16 @@ class Settings(private val ctx: Context) {
     private val keyLen = intPreferencesKey("len_pct")
     private val keyPitch = intPreferencesKey("pitch")
     private val keyActiveVoiceId = stringPreferencesKey("active_voice")
+    private val keyServerUrl = stringPreferencesKey("server_url")
+    private val keyServerOn = stringPreferencesKey("server_on")  // "1"/"0"
 
     val space: Flow<String> = ctx.dataStore.data.map { it[keySpace] ?: DEFAULT_SPACE }
     val steps: Flow<Int> = ctx.dataStore.data.map { it[keySteps] ?: 25 }
     val lenPct: Flow<Int> = ctx.dataStore.data.map { it[keyLen] ?: 100 }
     val pitch: Flow<Int> = ctx.dataStore.data.map { it[keyPitch] ?: 0 }
     val activeVoiceId: Flow<String?> = ctx.dataStore.data.map { it[keyActiveVoiceId] }
+    val serverUrl: Flow<String> = ctx.dataStore.data.map { it[keyServerUrl] ?: "" }
+    val serverOn: Flow<Boolean> = ctx.dataStore.data.map { (it[keyServerOn] ?: "0") == "1" }
 
     suspend fun setSpace(v: String) = withContext(Dispatchers.IO) {
         ctx.dataStore.edit { it[keySpace] = v }
@@ -44,6 +48,12 @@ class Settings(private val ctx: Context) {
             if (id == null) it.remove(keyActiveVoiceId) else it[keyActiveVoiceId] = id
         }
     }
+    suspend fun setServerUrl(v: String) = withContext(Dispatchers.IO) {
+        ctx.dataStore.edit { it[keyServerUrl] = v }
+    }
+    suspend fun setServerOn(v: Boolean) = withContext(Dispatchers.IO) {
+        ctx.dataStore.edit { it[keyServerOn] = if (v) "1" else "0" }
+    }
 
     suspend fun snapshot() = withContext(Dispatchers.IO) {
         val s = ctx.dataStore.data.first()
@@ -53,6 +63,8 @@ class Settings(private val ctx: Context) {
             lenPct = s[keyLen] ?: 100,
             pitch = s[keyPitch] ?: 0,
             activeVoiceId = s[keyActiveVoiceId],
+            serverUrl = s[keyServerUrl] ?: "",
+            serverOn = (s[keyServerOn] ?: "0") == "1",
         )
     }
 
@@ -62,6 +74,8 @@ class Settings(private val ctx: Context) {
         val lenPct: Int,
         val pitch: Int,
         val activeVoiceId: String?,
+        val serverUrl: String,
+        val serverOn: Boolean,
     )
 
     companion object {
