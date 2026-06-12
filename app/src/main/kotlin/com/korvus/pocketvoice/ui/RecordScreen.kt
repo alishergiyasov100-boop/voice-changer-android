@@ -111,11 +111,9 @@ fun RecordScreen() {
                 // Серверный режим — Colab/Kaggle GPU
                 val server = RemoteVoiceServer(
                     baseUrl = snap.serverUrl,
-                    diffusionSteps = snap.steps,
-                    lengthAdjust = snap.lenPct / 100f,
                     pitchShift = snap.pitch,
                 )
-                val bytes = server.convert(src, refFile)
+                val bytes = server.convert(src)
                 outFile.writeBytes(bytes)
             } else {
                 // Локальный OpenVoice ONNX
