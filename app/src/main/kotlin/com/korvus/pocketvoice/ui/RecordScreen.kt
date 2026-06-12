@@ -92,8 +92,8 @@ fun RecordScreen() {
 
     val liveDsp = remember { LiveDsp() }
     var liveOn by remember { mutableStateOf(false) }
-    var pitchSemi by remember { mutableStateOf(12f) }
-    var formant by remember { mutableStateOf(1.3f) }
+    var pitchSemi by remember { mutableStateOf(0f) }   // start at bypass — проверь что mic→speaker работает
+    var formant by remember { mutableStateOf(1.0f) }
 
     LaunchedEffect(Unit) {
         if (!app.converter.isReady()) app.converter.ensureDownloaded()

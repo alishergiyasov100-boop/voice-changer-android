@@ -61,13 +61,22 @@ class LiveDsp {
         val playBuf = maxOf(minPlay, FFT_SIZE * 4)
 
         val rec = AudioRecord(
-            MediaRecorder.AudioSource.VOICE_COMMUNICATION,  // echo cancel
+            MediaRecorder.AudioSource.MIC,  // не VOICE_COMMUNICATION — иначе AudioTrack уходит в ушной динамик
             sr, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, recBuf,
         )
         val play = AudioTrack(
-            AudioManager.STREAM_MUSIC, sr,
-            AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_16BIT,
-            playBuf, AudioTrack.MODE_STREAM,
+            android.media.AudioAttributes.Builder()
+                .setUsage(android.media.AudioAttributes.USAGE_MEDIA)
+                .setContentType(android.media.AudioAttributes.CONTENT_TYPE_MUSIC)
+                .build(),
+            AudioFormat.Builder()
+                .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
+                .setSampleRate(sr)
+                .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
+                .build(),
+            playBuf,
+            AudioTrack.MODE_STREAM,
+            android.media.AudioManager.AUDIO_SESSION_ID_GENERATE,
         )
 
         try {
@@ -75,18 +84,8 @@ class LiveDsp {
             play.play()
 
             val window = hannWindow(FFT_SIZE)
-            // Normalize window: для OLA с hop=FFT/4 sum window^2 = const
-            val windowSum = FloatArray(FFT_SIZE)
-            for (i in 0 until FFT_SIZE) windowSum[i] = window[i] * window[i]
-            // Normalization factor для OLA с overlap = hop/FFT * sum(w^2)
-            var wsq = 0f
-            for (k in 0 until FFT_SIZE / HOP_SIZE) {
-                for (i in 0 until HOP_SIZE) {
-                    val idx = i + k * HOP_SIZE
-                    if (idx < FFT_SIZE) wsq += windowSum[idx]
-                }
-            }
-            val outScale = 1f / (wsq / (FFT_SIZE / HOP_SIZE).toFloat()).coerceAtLeast(0.001f)
+            // COLA для Hann hop=N/4: sum(w[n-kH]^2) ≈ 1.5 — компенсируем double-windowing
+            val outScale = 2f / 3f
 
             val inputBuf = FloatArray(FFT_SIZE)
             val outputBuf = FloatArray(FFT_SIZE)
@@ -108,6 +107,12 @@ class LiveDsp {
             while (running) {
                 val n = rec.read(readBuf, 0, HOP_SIZE)
                 if (n <= 0) continue
+
+                // Diagnostic pass-through: pitch=0 + formant=1.0 → mic→speaker без DSP
+                if (kotlin.math.abs(pitchSemitones) < 0.1f && kotlin.math.abs(formantShift - 1f) < 0.05f) {
+                    play.write(readBuf, 0, HOP_SIZE)
+                    continue
+                }
 
                 // Shift inputBuf left, append new samples at end
                 System.arraycopy(inputBuf, HOP_SIZE, inputBuf, 0, FFT_SIZE - HOP_SIZE)
