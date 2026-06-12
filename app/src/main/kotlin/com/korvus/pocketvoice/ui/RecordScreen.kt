@@ -57,6 +57,7 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import com.korvus.pocketvoice.PocketVoiceApp
 import com.korvus.pocketvoice.api.RemoteVoiceServer
+import com.korvus.pocketvoice.audio.LiveDsp
 import com.korvus.pocketvoice.audio.Pcm
 import com.korvus.pocketvoice.audio.Recorder
 import com.korvus.pocketvoice.data.Voice
@@ -88,6 +89,11 @@ fun RecordScreen() {
     var outUrl by remember { mutableStateOf<String?>(null) }
     var errMsg by remember { mutableStateOf<String?>(null) }
     val recorder = remember { Recorder(ctx) }
+
+    val liveDsp = remember { LiveDsp() }
+    var liveOn by remember { mutableStateOf(false) }
+    var pitchSemi by remember { mutableStateOf(12f) }
+    var formant by remember { mutableStateOf(1.3f) }
 
     LaunchedEffect(Unit) {
         if (!app.converter.isReady()) app.converter.ensureDownloaded()
@@ -208,6 +214,59 @@ fun RecordScreen() {
             fontSize = 13.sp,
             modifier = Modifier.padding(horizontal = 24.dp),
         )
+        Spacer(Modifier.height(20.dp))
+
+        // === LIVE FX (on-device DSP, realtime) ===
+        Column(modifier = Modifier.padding(horizontal = 24.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("LIVE FX (ON-DEVICE)", color = VioletDeep,
+                    fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 2.sp)
+                Spacer(Modifier.width(8.dp))
+                Text(if (liveOn) "● ON" else "○ OFF",
+                    color = if (liveOn) CrimsonError else MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontSize = 11.sp, fontWeight = FontWeight.Bold)
+            }
+            Spacer(Modifier.height(8.dp))
+            Box(
+                modifier = Modifier.fillMaxWidth().height(54.dp)
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(if (liveOn) CrimsonError else VioletPrimary)
+                    .pointerInput(liveOn) {
+                        detectTapGestures(onTap = {
+                            if (liveOn) { liveDsp.stop(); liveOn = false }
+                            else {
+                                if (ContextCompat.checkSelfPermission(ctx, Manifest.permission.RECORD_AUDIO)
+                                    != PackageManager.PERMISSION_GRANTED) {
+                                    permLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                                    return@detectTapGestures
+                                }
+                                liveDsp.pitchSemitones = pitchSemi
+                                liveDsp.formantShift = formant
+                                liveDsp.start(scope) { t -> errMsg = t.message; liveOn = false }
+                                liveOn = true
+                            }
+                        })
+                    },
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    if (liveOn) "■  СТОП — live FX" else "▶  СТАРТ — live Miku FX",
+                    color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp,
+                )
+            }
+            Spacer(Modifier.height(12.dp))
+            Text("Pitch +${pitchSemi.toInt()} st", color = VioletDeep, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+            androidx.compose.material3.Slider(
+                value = pitchSemi, onValueChange = { pitchSemi = it; liveDsp.pitchSemitones = it },
+                valueRange = 0f..24f, steps = 23,
+            )
+            Text("Formant ×${"%.2f".format(formant)}", color = VioletDeep, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+            androidx.compose.material3.Slider(
+                value = formant, onValueChange = { formant = it; liveDsp.formantShift = it },
+                valueRange = 0.8f..2.0f, steps = 24,
+            )
+        }
+
         Spacer(Modifier.height(28.dp))
 
         // Record button
