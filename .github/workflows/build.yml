@@ -27,11 +27,11 @@ jobs:
       - run: ./gradlew assembleDebug assembleRelease --stacktrace
       - uses: actions/upload-artifact@v4
         with:
-          name: nomnom-debug-apk
+          name: pocketvoice-debug-apk
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
       - uses: actions/upload-artifact@v4
         with:
-          name: nomnom-release-apk
+          name: pocketvoice-release-apk
           path: app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
