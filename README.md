@@ -2,16 +2,27 @@
 
 Android voice changer — RVC + Miku, server-mode на free Colab T4.
 
-## Use it (один клик в день)
+## 🎤 LIVE-TALK (рекомендуется) — w-okada в браузере
 
-[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/alishergiyasov100-boop/voice-changer-android/blob/main/server/PocketVoice_RVC_Miku.ipynb)
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/alishergiyasov100-boop/voice-changer-android/blob/main/server/PocketVoice_LiveTalk_Miku.ipynb)
 
 1. Жми бейдж ↑ — открывается notebook
 2. Runtime → Change runtime type → **T4 GPU** → Save (один раз)
-3. **Run All** (Ctrl/Cmd+F9)
-4. Ждёшь ~8-12 мин setup → копируешь `https://*.trycloudflare.com` URL
-5. В PocketVoice → Профиль → Server URL → вставь → **Save** → **Server Mode ON**
-6. Запись → Miku голос на T4 GPU
+3. **Run All** (Ctrl/Cmd+F9), жди 10-15 мин
+4. Копируешь `https://*.trycloudflare.com` URL и открываешь в Chrome на Poco
+5. Model Slot 0 уже = Miku → нажми **Start** → разреши mic → говори
+6. Latency 100-300мс, **realtime live-talk**
+
+Без ngrok токенов. Без аккаунтов. Только Google для Colab.
+
+## 📼 BATCH (PocketVoice Android app) — запись → конверт
+
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/alishergiyasov100-boop/voice-changer-android/blob/main/server/PocketVoice_RVC_Miku.ipynb)
+
+1. Жми бейдж ↑
+2. **T4 GPU** → **Run All** → ждёшь 8-12 мин
+3. Копируешь URL → в PocketVoice → Профиль → Server URL → **Save** → **Server Mode ON**
+4. Запись → конверт в Miku ~3-5 сек/фраза
 
 **Не закрывай вкладку Colab.** Idle 6h → отрубается, открой и Run All снова.
 
