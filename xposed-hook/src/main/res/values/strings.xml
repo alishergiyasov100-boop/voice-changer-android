@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">PocketVoice Hook</string>
+    <string-array name="xposed_scope">
+        <item>org.telegram.messenger</item>
+        <item>org.telegram.messenger.web</item>
+        <item>com.discord</item>
+        <item>com.whatsapp</item>
+    </string-array>
+</resources>
